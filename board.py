@@ -2,8 +2,10 @@ from typing import List, Mapping, Optional, Tuple
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as pe
 
-from datatypes import Edge, Node, Resource, Tile
+from datatypes import Edge, Node, Tile
+from enums import Resource
 
 class Board:
     TILES_TO_NODES = [
@@ -56,20 +58,90 @@ class Board:
         
         self._create_structure()
 
-    def _create_structure(self):
-        """
-        Create the board structure with a fixed layout:
-        - 19 tiles arranged in the standard Catan pattern.
-        - 54 nodes and 72 edges interconnecting them.
+    # def _create_structure(self):
+    #     """
+    #     Create the board structure with a fixed layout:
+    #     - 19 tiles arranged in the standard Catan pattern.
+    #     - 54 nodes and 72 edges interconnecting them.
         
-        This method demonstrates the approach rather than fully enumerating 
-        all connections (which can be quite verbose). You might want to 
-        factor out data describing the standard board configuration.
-        """
+    #     This method demonstrates the approach rather than fully enumerating 
+    #     all connections (which can be quite verbose). You might want to 
+    #     factor out data describing the standard board configuration.
+    #     """
+    #     self.nodes = [Node(id=i) for i in range(54)]
+    #     self.edges = []
+
+    #     # Create all tiles:
+    #     resource_assignment = np.random.permutation(self.RESOURCES)
+    #     number_assignment = np.random.permutation(self.RESOURCE_NUMBERS)
+    #     seen_desert = False
+    #     self.tiles = []
+    #     for i in range(19):
+    #         resource = resource_assignment[i]
+    #         if resource == Resource.DESERT:
+    #             seen_desert = True
+    #             self.tiles.append(
+    #                 Tile(id=i, resource=resource, number=0)
+    #             )
+    #             continue
+    #         if seen_desert:
+    #             number = number_assignment[i - 1]
+    #         else:
+    #             number = number_assignment[i]
+    #         self.tiles.append(
+    #             Tile(id=i, resource=resource, number=number)
+    #         )
+        
+    #     # Now we link them all up
+    #     for t_id, tile in enumerate(self.tiles):
+    #         node_ids = self.TILES_TO_NODES[t_id]
+
+    #         tile_nodes = [self.nodes[n_id] for n_id in node_ids]
+
+    #         tile.nodes = tile_nodes
+
+    #         for n in tile_nodes:
+    #             n.tiles.append(tile)
+    #         for i in range(len(node_ids)):
+    #             n1 = tile_nodes[i]
+    #             n2 = tile_nodes[(i + 1) % 6]
+    #             if n1.id not in self.node_neighbors:
+    #                 self.node_neighbors[n1.id] = []
+    #             if n2.id not in self.node_neighbors:
+    #                 self.node_neighbors[n2.id] = []
+    #             if n2.id in self.node_neighbors[n1.id]:
+    #                 edge_set = {n1.id, n2.id}
+    #                 for edge in n1.edges:
+    #                     a, b = edge.nodes
+    #                     if {a.id, b.id} == edge_set:
+    #                         edge.tiles.append(tile)
+    #                         break
+    #                 continue
+    #             self.node_neighbors[n1.id].append(n2.id)
+    #             self.node_neighbors[n2.id].append(n1.id)
+    #             edge = Edge(id=len(self.edges), nodes=(n1, n2))
+    #             edge.tiles.append(tile)
+    #             tile.edges.append(edge)
+                
+    #             n1.edges.append(edge)
+    #             n2.edges.append(edge)
+    #             n1.tiles.append(tile)
+    #             n2.tiles.append(tile)
+    #             self.edges.append(edge)
+
+    def _create_structure(self):
+        self._create_nodes()
+        self._create_tiles()
+        self._link_tiles_nodes_and_edges()
+
+    def _create_nodes(self):
+        """Initialize nodes and related structures."""
         self.nodes = [Node(id=i) for i in range(54)]
         self.edges = []
+        self.node_neighbors = {}
 
-        # Create all tiles:
+    def _create_tiles(self):
+        """Randomly assign resources and numbers to tiles, including the desert tile."""
         resource_assignment = np.random.permutation(self.RESOURCES)
         number_assignment = np.random.permutation(self.RESOURCE_NUMBERS)
         seen_desert = False
@@ -78,54 +150,54 @@ class Board:
             resource = resource_assignment[i]
             if resource == Resource.DESERT:
                 seen_desert = True
-                self.tiles.append(
-                    Tile(id=i, resource=resource, number=0)
-                )
+                self.tiles.append(Tile(id=i, resource=resource, number=0))
                 continue
-            if seen_desert:
-                number = number_assignment[i - 1]
-            else:
-                number = number_assignment[i]
-            self.tiles.append(
-                Tile(id=i, resource=resource, number=number)
-            )
-        
-        # Now we link them all up
+            number = number_assignment[i - 1] if seen_desert else number_assignment[i]
+            self.tiles.append(Tile(id=i, resource=resource, number=number))
+
+    def _link_tiles_nodes_and_edges(self):
+        """Link tiles to their nodes and create edges between nodes."""
         for t_id, tile in enumerate(self.tiles):
             node_ids = self.TILES_TO_NODES[t_id]
+            tile.nodes = [self.nodes[n_id] for n_id in node_ids]
 
-            tile_nodes = [self.nodes[n_id] for n_id in node_ids]
+            # Assign tile references to nodes
+            for node in tile.nodes:
+                node.tiles.append(tile)
 
-            tile.nodes = tile_nodes
-
-            for n in tile_nodes:
-                n.tiles.append(tile)
+            # Create or link edges between these nodes
             for i in range(len(node_ids)):
-                n1 = tile_nodes[i]
-                n2 = tile_nodes[(i + 1) % 6]
+                n1 = tile.nodes[i]
+                n2 = tile.nodes[(i + 1) % 6]
+
                 if n1.id not in self.node_neighbors:
                     self.node_neighbors[n1.id] = []
                 if n2.id not in self.node_neighbors:
                     self.node_neighbors[n2.id] = []
+
                 if n2.id in self.node_neighbors[n1.id]:
+                    # Edge already exists; add this tile to it
                     edge_set = {n1.id, n2.id}
                     for edge in n1.edges:
                         a, b = edge.nodes
                         if {a.id, b.id} == edge_set:
                             edge.tiles.append(tile)
+                            tile.edges.append(edge)
                             break
-                    continue
-                self.node_neighbors[n1.id].append(n2.id)
-                self.node_neighbors[n2.id].append(n1.id)
-                edge = Edge(id=len(self.edges), nodes=(n1, n2))
-                edge.tiles.append(tile)
-                tile.edges.append(edge)
-                
-                n1.edges.append(edge)
-                n2.edges.append(edge)
-                n1.tiles.append(tile)
-                n2.tiles.append(tile)
-                self.edges.append(edge)
+                else:
+                    # Create a new edge
+                    self.node_neighbors[n1.id].append(n2.id)
+                    self.node_neighbors[n2.id].append(n1.id)
+                    edge = Edge(id=len(self.edges), nodes=(n1, n2))
+                    edge.tiles.append(tile)
+                    tile.edges.append(edge)
+
+                    n1.edges.append(edge)
+                    n2.edges.append(edge)
+                    n1.tiles.append(tile)
+                    n2.tiles.append(tile)
+                    self.edges.append(edge)
+
                 
     def _get_row_col_from_idx(self, idx: int, layout: List[int]) -> Tuple[int, int]:
         for row, amt in enumerate(layout):
@@ -163,18 +235,30 @@ class Board:
                 return x, y
             idx -= amt
 
-    def plot(self):
+    def plot(self, show_ids: bool = False):
         plt.figure(figsize=(8, 8))
         for edge in self.edges:
             node_a, node_b = edge.nodes
             id_a, id_b = node_a.id, node_b.id
             x_a, y_a = self._get_node_coords(id_a)
             x_b, y_b = self._get_node_coords(id_b)
-            plt.plot([x_a, x_b], [y_a, y_b], c='black', zorder=0)
-        for i in range(len(self.nodes)):
+            if edge.owner:
+                #plt.plot([x_a, x_b], [y_a, y_b], c=edge.owner.color, lw=3, zorder=0, edgecolor='black')
+                plt.plot([x_a, x_b], [y_a, y_b], color=edge.owner.color, lw=3, path_effects=[pe.Stroke(linewidth=5, foreground='black'), pe.Normal()], zorder=0)
+            else:
+                plt.plot([x_a, x_b], [y_a, y_b], c='black', zorder=0)
+            if show_ids:
+                x_mid = (x_a + x_b) / 2
+                y_mid = (y_a + y_b) / 2
+                plt.annotate(edge.id, (x_mid, y_mid), textcoords="offset points", xytext=(5,5), ha='center')
+        for i, node in enumerate(self.nodes):
             x, y = self._get_node_coords(i)
-            plt.scatter([x], [y], c='white', zorder=1, s=75, edgecolor='black')
-            #plt.annotate(i, (x, y), textcoords="offset points", xytext=(5,5), ha='center')
+            if node.owner:
+                plt.scatter([x], [y], c=node.owner.color, zorder=1, s=100, edgecolor='black')
+            else:
+                plt.scatter([x], [y], c='white', zorder=1, s=75, edgecolor='black')
+            if show_ids:
+                plt.annotate(i, (x, y), textcoords="offset points", xytext=(5,5), ha='center')
         for i, tile in enumerate(self.tiles):
             x, y = self._get_tile_coords(i)
             tile_color = self.RESOURCE_COLOR_MAP[tile.resource]
